@@ -1,0 +1,355 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Solomon's Food Finder</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  :root{ --bg:#0b1220; --panel:#0f172a; --border:#1f2937; --muted:#94a3b8; --text:#e5e7eb; --accent:#22c55e; --chip:#111827;}
+  *{box-sizing:border-box}
+  body{margin:0; font-family:ui-sans-serif,system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif; background:var(--bg); color:var(--text)}
+  header{padding:18px; text-align:center; border-bottom:1px solid var(--border)}
+  header h1{margin:0 0 6px; font-size:22px}
+  header p{margin:0; color:var(--muted); font-size:14px}
+  .wrap{display:grid; grid-template-columns: 430px 1fr; gap:16px; padding:16px}
+  @media (max-width:900px){ .wrap{grid-template-columns:1fr; padding:12px; gap:12px} }
+  .panel{background:var(--panel); border:1px solid var(--border); border-radius:16px; padding:14px}
+  label{display:block; font-size:13px; color:var(--muted); margin-bottom:6px}
+  input, select, button{
+    width:100%; padding:14px; border-radius:12px; border:1px solid var(--border);
+    background:#0b1324; color:var(--text); font-size:16px; -webkit-tap-highlight-color: transparent;
+  }
+  .row{display:flex; gap:10px; flex-wrap:wrap; align-items:end}
+  .btn{background:var(--accent); color:#000; border:none; font-weight:700; cursor:pointer}
+  .btn.secondary{background:#334155; color:#e2e8f0}
+  .btn.ghost{background:transparent; border:1px dashed var(--border); color:#e2e8f0}
+  .hint{font-size:12px; color:var(--muted); margin-top:4px}
+  .section-title{font-size:15px; color:#cbd5e1; margin:12px 0 6px}
+  #map{height:460px; border-radius:14px; border:1px solid var(--border)}
+  .card{background:#0b1324; border:1px solid var(--border); border-radius:14px; padding:12px; display:grid; grid-template-columns:88px 1fr; gap:10px}
+  .card.noimg{grid-template-columns:1fr}
+  .thumb{width:88px; height:88px; border-radius:10px; background:#0e162b; object-fit:cover}
+  .name{font-weight:800; font-size:16px}
+  .small{font-size:13px; color:var(--muted)}
+  .chips{display:flex; gap:6px; flex-wrap:wrap; margin:2px 0 6px}
+  .chip{background:var(--chip); color:#cbd5e1; padding:6px 10px; border-radius:999px; font-size:12px; border:1px solid var(--border)}
+  .actions{display:flex; gap:10px; flex-wrap:wrap}
+  .top{border-color:#16a34a; box-shadow:0 0 0 2px rgba(34,197,94,.18) inset}
+  .empty{padding:14px; text-align:center; border:1px dashed var(--border); border-radius:12px; color:#94a3b8}
+  .error{color:#fecaca; background:#7f1d1d; padding:10px; border-radius:10px; border:1px solid #ef4444}
+  .stars{font-size:14px; letter-spacing:1px}
+  .stars .on{color:#facc15} .stars .off{color:#334155}
+  .stickybar{position:sticky; bottom:0; left:0; right:0; z-index:30; background:linear-gradient(0deg, rgba(11,19,36,0.98), rgba(11,19,36,0.9)); border:1px solid var(--border); border-radius:14px; padding:10px; margin-top:10px; pointer-events:auto}
+  .stickybar .row{gap:8px}
+</style>
+</head>
+<body>
+<header>
+  <h1>🍽️ Solomon’s Food Finder</h1>
+  <p>Pick a cuisine (or hit “Surprise Me”), choose Restaurant vs Takeaway, and go.</p>
+</header>
+
+<div class="wrap">
+  <!-- Controls + Results -->
+  <div class="panel">
+    <div class="row">
+      <div style="flex:1 1 100%">
+        <label for="cuisine">Cuisine (dropdown)</label>
+        <select id="cuisine">
+          <option value="">— Pick a cuisine —</option>
+          <option>Italian</option><option>Indian</option><option>Chinese</option>
+          <option>Turkish</option><option>Japanese</option><option>Thai</option>
+          <option>Mexican</option><option>Greek</option><option>Lebanese</option>
+          <option>American</option><option>Vegan</option><option>Vegetarian</option>
+          <option>Seafood</option><option>Steak</option><option>Pizza</option>
+          <option>Burgers</option><option>Tapas</option><option>Kebab</option>
+          <option>Korean</option><option>Ramen</option><option>BBQ</option>
+          <option>Peri-peri</option><option>Pho</option><option>Dessert</option>
+        </select>
+      </div>
+      <div style="flex:1 1 100%">
+        <label for="cuisineText">Or type any cuisine</label>
+        <input id="cuisineText" placeholder="e.g., sushi, shawarma, biryani" />
+      </div>
+    </div>
+
+    <div class="row" style="margin-top:8px">
+      <div style="flex:1 1 100%">
+        <label for="venueType">Venue type</label>
+        <select id="venueType">
+          <option value="both" selected>Both (Restaurant & Takeaway)</option>
+          <option value="restaurant">Restaurant (table service)</option>
+          <option value="takeaway">Takeaway / Fast food</option>
+        </select>
+        <div class="hint">If nothing loads, open this file in Safari (Share → Open in Safari) or host it (Netlify Drop).</div>
+      </div>
+    </div>
+
+    <div class="row" style="margin-top:8px">
+      <div style="flex:1 1 100%">
+        <label for="locationInput">Location (if GPS unavailable)</label>
+        <input id="locationInput" inputmode="text" placeholder="Postcode, city, or area (e.g., 'Wembley' or 'SW1A 1AA')" />
+        <div class="hint">Leave blank to use your current location.</div>
+      </div>
+    </div>
+
+    <div class="row" style="margin-top:8px">
+      <div style="flex:1">
+        <label for="radius">Distance (km)</label>
+        <input type="range" id="radius" min="1" max="10" step="1" value="3" />
+        <div class="hint"><span id="radiusVal">3</span> km</div>
+      </div>
+      <div style="flex:1">
+        <label for="limit">Max results</label>
+        <select id="limit">
+          <option>20</option><option selected>40</option><option>60</option><option>100</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="stickybar">
+      <div class="row">
+        <button type="button" class="btn secondary" id="useMyLocation" onclick="detectLocation(false)">Use my location</button>
+        <button type="button" class="btn" id="searchBtn" onclick="runSearch()">Find Dinner</button>
+        <button type="button" class="btn ghost" id="surpriseBtn" onclick="surpriseMe()">🎲 Surprise Me</button>
+      </div>
+      <div id="status" class="hint" style="margin-top:8px"></div>
+    </div>
+
+    <div class="section-title">Top Recommendation</div>
+    <div id="topPick"></div>
+
+    <div class="section-title" style="margin-top:12px">More Options</div>
+    <div id="results"></div>
+  </div>
+
+  <!-- Map -->
+  <div class="panel">
+    <div id="map" role="img" aria-label="Map showing restaurants"></div>
+  </div>
+</div>
+
+<script>
+  // iOS detection & Maps link
+  const isIOS = (() => {
+    const ua = navigator.userAgent || ''; const platform = navigator.platform || '';
+    const touchMac = /Mac/.test(ua) && 'ontouchend' in document;
+    return /iPhone|iPad|iPod/.test(platform) || /iPhone|iPad|iPod/.test(ua) || touchMac;
+  })();
+  const mapsLink = (lat,lng,name) => isIOS
+    ? `http://maps.apple.com/?daddr=${lat},${lng}&q=${encodeURIComponent(name||'Destination')}`
+    : `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving`;
+
+  // Map & global
+  let map, userLatLng = null, markers = [];
+  const overpassEndpoints = [
+    "https://overpass-api.de/api/interpreter",
+    "https://overpass.kumi.systems/api/interpreter"
+  ];
+
+  function initMap() {
+    map = L.map('map', { zoomControl:true }).setView([51.5072,-0.1276], 13);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19, attribution:'&copy; OpenStreetMap'}).addTo(map);
+    detectLocation(true);
+    document.getElementById('radius').addEventListener('input', e=>document.getElementById('radiusVal').textContent=e.target.value);
+  }
+  window.addEventListener('load', initMap);
+
+  function setStatus(html, type=""){ document.getElementById('status').innerHTML = html ? `<div class="${type==='error'?'error':'hint'}">${html}</div>` : ''; }
+
+  function detectLocation(silent=false){
+    if(!navigator.geolocation){ if(!silent) setStatus('Geolocation not supported. Type a location.', 'error'); return; }
+    navigator.geolocation.getCurrentPosition(p=>{
+      userLatLng = {lat:p.coords.latitude,lng:p.coords.longitude};
+      map.setView([userLatLng.lat,userLatLng.lng], 14);
+      L.circleMarker([userLatLng.lat,userLatLng.lng], {radius:7, color:'#22c55e'}).addTo(map).bindPopup('You are here');
+      if(!silent) setStatus('Using your current location.');
+    }, ()=>{ if(!silent) setStatus('Couldn’t access your location. Enter a city/postcode.', 'error'); }, {timeout:8000});
+  }
+
+  async function geocodeText(text){
+    // Some iOS-local-file contexts lack a referrer — hosting on https helps.
+    const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=${encodeURIComponent(text)}`;
+    const res = await fetch(url, {headers:{Accept:"application/json"}});
+    if(!res.ok) throw new Error('Geocoding failed (open this in Safari or host the file).');
+    const js = await res.json(); if(!js.length) throw new Error('No such place found.');
+    return { lat:+js[0].lat, lng:+js[0].lon };
+  }
+
+  function clearMarkers(){ markers.forEach(m=>map.removeLayer(m)); markers = []; }
+  function haversine(a,b){ const R=6371000,toRad=d=>d*Math.PI/180; const dLat=toRad(b.lat-a.lat),dLng=toRad(b.lng-a.lng),lat1=toRad(a.lat),lat2=toRad(b.lat); const h=Math.sin(dLat/2)**2+Math.cos(lat1)*Math.cos(lat2)*Math.sin(dLng/2)**2; return 2*R*Math.asin(Math.sqrt(h)); }
+  function scorePlace(p, center, radiusMeters){
+    const dist = p._distanceMeters ?? haversine(center,{lat:p.lat,lng:p.lng});
+    const prox = 1 - Math.min(dist / radiusMeters, 1);
+    const t = p.tags || {};
+    const richnessRaw = [t.name, t.cuisine, t.opening_hours, t.website, t["contact:phone"]||t.phone, t["addr:street"]||t["addr:full"]||t["addr:postcode"]].filter(Boolean).length;
+    const richness = richnessRaw / 6;
+    const score = 0.6*prox + 0.4*richness;
+    return { score, breakdown:{proximity:+(0.6*prox).toFixed(3),richness:+(0.4*richness).toFixed(3)} };
+  }
+  function starsFromScore(score){
+    const s = Math.max(0, Math.min(5, Math.round(score*5*2)/2)); const full=Math.floor(s), half=(s-full)>=0.5?1:0, empty=5-full-half;
+    return '★'.repeat(full) + (half?'☆':'') + '✩'.repeat(empty);
+  }
+  function cuisineFilterString(cuisine){ if(!cuisine) return ""; const esc=cuisine.replace(/[.*+?^${}()|[\]\\]/g,"\\$&"); return `["cuisine"~"${esc}",i]`; }
+  function venueFilterBlock(type){
+    if(type==='restaurant'){
+      return `node["amenity"="restaurant"]{CF}(around:{R},{LAT},{LNG});way["amenity"="restaurant"]{CF}(around:{R},{LAT},{LNG});relation["amenity"="restaurant"]{CF}(around:{R},{LAT},{LNG});`;
+    } else if(type==='takeaway'){
+      return `node["amenity"="fast_food"]{CF}(around:{R},{LAT},{LNG});way["amenity"="fast_food"]{CF}(around:{R},{LAT},{LNG});relation["amenity"="fast_food"]{CF}(around:{R},{LAT},{LNG});node["takeaway"~"yes|only",i]{CF}(around:{R},{LAT},{LNG});way["takeaway"~"yes|only",i]{CF}(around:{R},{LAT},{LNG});relation["takeaway"~"yes|only",i]{CF}(around:{R},{LAT},{LNG});`;
+    } else {
+      return `node["amenity"="restaurant"]{CF}(around:{R},{LAT},{LNG});way["amenity"="restaurant"]{CF}(around:{R},{LAT},{LNG});relation["amenity"="restaurant"]{CF}(around:{R},{LAT},{LNG});node["amenity"="fast_food"]{CF}(around:{R},{LAT},{LNG});way["amenity"="fast_food"]{CF}(around:{R},{LAT},{LNG});relation["amenity"="fast_food"]{CF}(around:{R},{LAT},{LNG});`;
+    }
+  }
+  function buildOverpassQuery(center, radiusMeters, cuisine, venueType){
+    const CF = cuisineFilterString(cuisine);
+    const block = venueFilterBlock(venueType).replaceAll('{CF}', CF).replaceAll('{R}', radiusMeters).replaceAll('{LAT}', center.lat).replaceAll('{LNG}', center.lng);
+    return `[out:json][timeout:25];( ${block} );out center ${document.getElementById('limit').value};`;
+  }
+  async function fetchOverpass(query){
+    let lastErr;
+    for(const ep of overpassEndpoints){
+      try{
+        const res = await fetch(ep,{method:"POST",headers:{"Content-Type":"text/plain;charset=UTF-8"},body:query});
+        if(!res.ok) throw new Error(`Overpass error ${res.status}`);
+        return await res.json();
+      }catch(e){ lastErr = e; }
+    }
+    throw lastErr || new Error('Overpass request failed.');
+  }
+  function normalizeElements(elements){
+    return elements.map(el=>{
+      const isNode = el.type === "node";
+      const lat = isNode ? el.lat : (el.center?.lat ?? null);
+      const lng = isNode ? el.lon : (el.center?.lon ?? null);
+      return { id:`${el.type}/${el.id}`, type:el.type, lat, lng, tags: el.tags || {} };
+    }).filter(p=>p.lat!=null && p.lng!=null);
+  }
+  function addMarker(p, isTop){
+    const name = p.tags.name || 'Unnamed';
+    const addr = [p.tags["addr:street"], p.tags["addr:housenumber"], p.tags["addr:postcode"]].filter(Boolean).join(' ');
+    const cuisine = p.tags.cuisine ? p.tags.cuisine.replace(/;/g, ', ') : '';
+    const m = L.marker([p.lat,p.lng], isTop?{title:name}:{});
+    m.bindPopup(`<strong>${name}</strong><br/>${addr || ''}<br/>${cuisine ? `Cuisine: ${cuisine}<br/>` : ''}<a target="_blank" rel="noopener" href="${mapsLink(p.lat,p.lng,name)}">${isIOS?'Open in Apple Maps':'Open in Google Maps'}</a>`);
+    m.addTo(map); markers.push(m);
+  }
+  function cardHTML(p){
+    const t = p.tags || {};
+    const name = t.name || 'Unnamed';
+    const addr = [t["addr:housenumber"], t["addr:street"], t["addr:postcode"]].filter(Boolean).join(' ');
+    const cuisine = t.cuisine ? t.cuisine.replace(/;/g, ', ') : '';
+    const distKm = (p._distanceMeters/1000).toFixed(2)+' km';
+    const link = mapsLink(p.lat,p.lng,name);
+    const stars = starsFromScore(p._score.score);
+    const typeBadge = t.amenity==='fast_food' || /yes|only/i.test(t.takeaway||'') ? '🥡 Takeaway' : '🍽️ Restaurant';
+    return `
+      <div class="card noimg">
+        <div>
+          <div class="name">${name}</div>
+          <div class="small">${addr}</div>
+          <div class="stars"><span class="on">${stars}</span> <span class="small">Smart Score</span></div>
+          <div class="chips">
+            <span class="chip">📍 ${distKm}</span>
+            ${cuisine ? `<span class="chip">🍽️ ${cuisine}</span>` : ''}
+            <span class="chip">${typeBadge}</span>
+          </div>
+          <div class="actions">
+            <a class="btn" href="${link}" target="_blank" rel="noopener">${isIOS?'Apple Maps':'Google Maps'}</a>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+  function renderTop(p){
+    const el = document.getElementById('topPick');
+    if(!p){ el.innerHTML = '<div class="empty">No top pick yet. Try searching.</div>'; return; }
+    el.innerHTML = cardHTML(p);
+    el.firstElementChild.classList.add('top');
+  }
+  function renderList(arr){
+    const el = document.getElementById('results');
+    if(!arr || !arr.length){ el.innerHTML = '<div class="empty">No results. Try widening distance or another cuisine.</div>'; return; }
+    el.innerHTML = arr.map(p=>cardHTML(p)).join('');
+  }
+  function fitBounds(points, center){
+    const layers = []; points.forEach(p=>layers.push(L.marker([p.lat,p.lng]))); if(center) layers.push(L.marker([center.lat,center.lng]));
+    if(layers.length){ const group = L.featureGroup(layers); map.fitBounds(group.getBounds().pad(0.2)); }
+  }
+
+  async function runSearch(){
+    setStatus('');
+    // 1) Center
+    let center = userLatLng;
+    const typed = (document.getElementById('locationInput').value||'').trim();
+    if(!center && typed){ try{ center = await geocodeText(typed);}catch(e){ setStatus(e.message, 'error'); demoFallback(); return; } }
+    if(!center){ setStatus('No location. Allow geolocation or enter a place name/postcode.', 'error'); demoFallback(); return; }
+
+    const radiusKm = parseInt(document.getElementById('radius').value||'3',10);
+    const radiusMeters = (isNaN(radiusKm)?3:radiusKm)*1000;
+
+    // 2) Cuisine + type
+    const dd = (document.getElementById('cuisine').value||'').trim();
+    const txt = (document.getElementById('cuisineText').value||'').trim();
+    const cuisine = txt || dd;
+    if(!cuisine){ setStatus('Pick or type a cuisine (or tap “Surprise Me”).', 'error'); return; }
+    const venueType = document.getElementById('venueType').value;
+
+    // 3) Overpass query
+    const q = buildOverpassQuery(center, radiusMeters, cuisine, venueType);
+    setStatus('Searching restaurants via OpenStreetMap…');
+
+    let data;
+    try{ data = await fetchOverpass(q); }
+    catch(e){
+      setStatus('Network/search blocked on iOS local files. Open this in Safari (Share → Open in Safari) or host the file. Showing demo data ↓', 'error');
+      demoFallback(center); return;
+    }
+
+    const items = normalizeElements(data.elements);
+    items.forEach(p=>{ p._distanceMeters = haversine(center,{lat:p.lat,lng:p.lng}); p._score = scorePlace(p,center,radiusMeters); p._scoreValue = p._score.score; });
+    items.sort((a,b)=>b._scoreValue - a._scoreValue);
+
+    const top = items[0];
+    renderTop(top);
+    renderList(items.slice(1, 21));
+
+    clearMarkers();
+    if(top) addMarker(top,true);
+    items.slice(0,21).forEach((p,idx)=>{ if(idx===0) return; addMarker(p,false); });
+    fitBounds(items.slice(0,21), center);
+
+    setStatus(items.length ? `Found ${items.length} place(s). Showing top ${Math.min(items.length,21)}.` : 'No results.');
+  }
+
+  function surpriseMe(){
+    const dd = document.getElementById('cuisine');
+    const opts = Array.from(dd.options).map(o=>o.value).filter(Boolean);
+    const pick = opts[Math.floor(Math.random()*opts.length)];
+    dd.value = pick; document.getElementById('cuisineText').value = '';
+    const types = ['both','restaurant','takeaway']; document.getElementById('venueType').value = types[Math.floor(Math.random()*types.length)];
+    const r = Math.floor(2 + Math.random()*5); document.getElementById('radius').value = r; document.getElementById('radiusVal').textContent = r;
+    setStatus(`🎲 Surprise: ${pick} · ${document.getElementById('venueType').value} · ${r} km`);
+    runSearch();
+  }
+
+  // --- Demo fallback so you can verify the UI/buttons even if APIs are blocked locally ---
+  function demoFallback(center={lat:51.5072,lng:-0.1276}){
+    const mock = [
+      {lat:center.lat+0.01,lng:center.lng+0.01,tags:{name:"Demo Pizza Place",cuisine:"pizza",amenity:"restaurant"}},
+      {lat:center.lat-0.008,lng:center.lng+0.006,tags:{name:"Demo Sushi To Go",cuisine:"japanese;sushi",amenity:"fast_food",takeaway:"yes"}},
+      {lat:center.lat+0.006,lng:center.lng-0.009,tags:{name:"Demo Curry House",cuisine:"indian",amenity:"restaurant"}}
+    ];
+    mock.forEach(p=>{ p._distanceMeters = haversine(center,{lat:p.lat,lng:p.lng}); p._score = scorePlace(p,center,3000); p._scoreValue = p._score.score; });
+    mock.sort((a,b)=>b._scoreValue - a._scoreValue);
+    renderTop(mock[0]);
+    renderList(mock.slice(1));
+    clearMarkers(); mock.forEach((p,i)=>addMarker(p,i===0));
+    fitBounds(mock, center);
+  }
+</script>
+</body>
+</html>
